@@ -110,7 +110,7 @@ def on_message(event):
         )
     except Exception as e:
         print("ERROR:", type(e).__name__, str(e)[:300])
-        reply = "ขอโทษครับ แปลไม่สำเร็จ ลองใหม่อีกครั้งนะครับ"
+        reply = "เอาใหม่ ตั้งสติดิ๊ พิมพ์ภาษาคน"
 
     reply = reply[:4900]  # LINE จำกัด 5000 ตัวอักษรต่อข้อความ
 
