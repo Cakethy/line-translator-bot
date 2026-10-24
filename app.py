@@ -18,14 +18,17 @@ line_config = Configuration(access_token=os.environ["LINE_ACCESS_TOKEN"].strip()
 
 # ---------- Gemini ----------
 _key = os.environ["GEMINI_API_KEY"].strip()
-if _key.startswith("AQ."):
-    # key แบบ Vertex AI (Google Cloud)
+
+# ค่าเริ่มต้นคือ Google AI Studio (ไม่ต้องเปิด Vertex AI)
+# ถ้าต้องการใช้ Vertex AI ให้ตั้ง USE_VERTEX=1 ใน Environment
+USE_VERTEX = os.environ.get("USE_VERTEX", "0").strip() == "1"
+
+if USE_VERTEX:
     gemini = genai.Client(vertexai=True, api_key=_key)
 else:
-    # key แบบ Google AI Studio (AIza...)
     gemini = genai.Client(api_key=_key)
 
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
 
 SYSTEM_PROMPT = """You are a translation engine. Detect the language of the user's text.
 If it is Thai, translate to English. If it is any other language, translate to Thai.
