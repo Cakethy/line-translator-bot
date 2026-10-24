@@ -21,7 +21,7 @@ gemini = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"].strip(),
     vertexai=False,  # บังคับไม่ใช้ Vertex AI
 )
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
 # ตั้ง DEBUG=1 บน Render เพื่อให้บอทส่ง error จริงกลับมาในแชท
 DEBUG = os.environ.get("DEBUG", "0").strip() == "1"
