@@ -16,19 +16,15 @@ app = Flask(__name__)
 handler = WebhookHandler(os.environ["LINE_CHANNEL_SECRET"].strip())
 line_config = Configuration(access_token=os.environ["LINE_ACCESS_TOKEN"].strip())
 
-# ---------- Gemini ----------
-_key = os.environ["GEMINI_API_KEY"].strip()
-
-# ค่าเริ่มต้นคือ Google AI Studio (ไม่ต้องเปิด Vertex AI)
-# ถ้าต้องการใช้ Vertex AI ให้ตั้ง USE_VERTEX=1 ใน Environment
-USE_VERTEX = os.environ.get("USE_VERTEX", "0").strip() == "1"
-
-if USE_VERTEX:
-    gemini = genai.Client(vertexai=True, api_key=_key)
-else:
-    gemini = genai.Client(api_key=_key)
-
+# ---------- Gemini (Google AI Studio เท่านั้น) ----------
+gemini = genai.Client(
+    api_key=os.environ["GEMINI_API_KEY"].strip(),
+    vertexai=False,  # บังคับไม่ใช้ Vertex AI
+)
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+
+# ตั้ง DEBUG=1 บน Render เพื่อให้บอทส่ง error จริงกลับมาในแชท
+DEBUG = os.environ.get("DEBUG", "0").strip() == "1"
 
 SYSTEM_PROMPT = """You are a translation engine. Detect the language of the user's text.
 If it is Thai, translate to English. If it is any other language, translate to Thai.
@@ -109,8 +105,11 @@ def on_message(event):
             f"💬 แชทเพื่อน\n{result['casual']}"
         )
     except Exception as e:
-        print("ERROR:", type(e).__name__, str(e)[:300])
-        reply = "เอาใหม่ ตั้งสติดิ๊ พิมพ์ภาษาคน"
+        print("ERROR:", type(e).__name__, str(e)[:500])
+        if DEBUG:
+            reply = f"DEBUG: {type(e).__name__}: {str(e)[:300]}"
+        else:
+            reply = "เอาใหม่ ตั้งสติดี พิมพ์ภาษาคน"
 
     reply = reply[:4900]  # LINE จำกัด 5000 ตัวอักษรต่อข้อความ
 
