@@ -8,7 +8,7 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 
 app = Flask(__name__)
 
@@ -19,7 +19,8 @@ line_config = Configuration(access_token=os.environ["LINE_ACCESS_TOKEN"].strip()
 # ---------- Gemini (Google AI Studio เท่านั้น) ----------
 gemini = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"].strip(),
-    vertexai=False,  # บังคับไม่ใช้ Vertex AI
+    vertexai=False,
+    http_options=types.HttpOptions(timeout=20000),  # 20 วินาที (หน่วยมิลลิวินาที)
 )
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
@@ -59,7 +60,7 @@ def parse_json(raw: str) -> dict:
 
 def translate(text: str) -> dict:
     last_error = None
-    for _ in range(2):  # ลองสูงสุด 2 ครั้ง
+    for _ in range(2):  # ลองซ้ำเฉพาะกรณี error ชั่วคราว / JSON เพี้ยน
         try:
             resp = gemini.models.generate_content(
                 model=MODEL,
@@ -73,6 +74,8 @@ def translate(text: str) -> dict:
             if "formal" in result and "casual" in result:
                 return result
             raise ValueError("missing formal/casual in response")
+        except errors.ClientError:
+            raise  # 4xx เช่น 429 โควตาหมด / 404 โมเดลไม่มี ไม่ต้องลองซ้ำ
         except Exception as e:
             last_error = e
     raise last_error
@@ -106,7 +109,9 @@ def on_message(event):
         )
     except Exception as e:
         print("ERROR:", type(e).__name__, str(e)[:500])
-        if DEBUG:
+        if "429" in str(e):
+            reply = "โควตา AI วันนี้หมดแล้ว ลองใหม่พรุ่งนี้นะครับ"
+        elif DEBUG:
             reply = f"DEBUG: {type(e).__name__}: {str(e)[:300]}"
         else:
             reply = "เอาใหม่ ตั้งสติดี พิมพ์ภาษาคน"
