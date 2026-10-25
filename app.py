@@ -20,15 +20,25 @@ line_config = Configuration(access_token=os.environ["LINE_ACCESS_TOKEN"].strip()
 gemini = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"].strip(),
     vertexai=False,
-    http_options=types.HttpOptions(timeout=15000),  # 15 วินาที (มิลลิวินาที)
+    http_options=types.HttpOptions(timeout=12000),  # 12 วินาทีต่อครั้ง (มิลลิวินาที)
 )
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
 
-# THINKING_LEVEL: low (ค่าเริ่มต้น) / minimal / medium / high / off
-THINKING_LEVEL = os.environ.get("THINKING_LEVEL", "low").strip().lower()
+# GEMINI_MODEL ใส่ได้หลายชื่อ คั่นด้วยคอมมา จะลองตามลำดับ
+# เช่น gemini-3.8-flash,gemini-flash-latest,gemini-flash-lite-latest
+MODELS = [
+    m.strip()
+    for m in os.environ.get(
+        "GEMINI_MODEL",
+        "gemini-3.8-flash,gemini-flash-latest,gemini-flash-lite-latest",
+    ).split(",")
+    if m.strip()
+]
+
+# THINKING_LEVEL: low / minimal / medium / high / off
+THINKING_LEVEL = os.environ.get("THINKING_LEVEL", "off").strip().lower()
 _use_thinking = THINKING_LEVEL not in ("", "off")
 
-# ตั้ง DEBUG=1 บน Render เพื่อให้บอทส่ง error จริงกลับมาในแชท
+# DEBUG=1 ให้บอทส่ง error จริงกลับมาในแชท (ใช้งานจริงให้ปิด)
 DEBUG = os.environ.get("DEBUG", "0").strip() == "1"
 
 SYSTEM_PROMPT = """You are a translation engine. Detect the language of the user's text.
@@ -77,15 +87,12 @@ def parse_json(raw: str) -> dict:
         raise
 
 
-def translate(text: str) -> dict:
+def call_model(model: str, text: str) -> dict:
     global _use_thinking
-    last_error = None
     for _ in range(2):
         try:
             resp = gemini.models.generate_content(
-                model=MODEL,
-                contents=text,
-                config=make_config(),
+                model=model, contents=text, config=make_config()
             )
             result = parse_json(resp.text)
             if "formal" in result and "casual" in result:
@@ -96,11 +103,29 @@ def translate(text: str) -> dict:
             if _use_thinking and "think" in str(e).lower():
                 print("Disabling thinking config:", str(e)[:200])
                 _use_thinking = False
-                last_error = e
                 continue
-            raise  # 429 โควตาหมด / 404 ไม่พบโมเดล ไม่ต้องลองซ้ำ
-        except Exception as e:
+            raise
+    raise RuntimeError("call_model failed")
+
+
+def translate(text: str) -> dict:
+    last_error = None
+    for model in MODELS:
+        try:
+            return call_model(model, text)
+        except errors.APIError as e:
+            code = getattr(e, "code", None)
+            print(f"MODEL {model} failed: {code} {str(e)[:200]}")
             last_error = e
+            # 404 ไม่พบโมเดล / 429 โควตา / 5xx ล่มชั่วคราว -> ลองโมเดลถัดไป
+            if code in (404, 429, 500, 503, 504) or code is None:
+                continue
+            raise
+        except Exception as e:
+            # timeout, JSON เพี้ยน ฯลฯ -> ลองโมเดลถัดไป
+            print(f"MODEL {model} error: {type(e).__name__} {str(e)[:200]}")
+            last_error = e
+            continue
     raise last_error
 
 
@@ -124,12 +149,15 @@ def process_event(event):
         )
     except Exception as e:
         print("ERROR:", type(e).__name__, str(e)[:500])
-        if "429" in str(e):
+        msg = str(e)
+        if DEBUG:
+            reply = f"DEBUG: {type(e).__name__}: {msg[:300]}"
+        elif "429" in msg:
             reply = "โควตา AI วันนี้หมดแล้ว ลองใหม่พรุ่งนี้นะครับ"
-        elif DEBUG:
-            reply = f"DEBUG: {type(e).__name__}: {str(e)[:300]}"
+        elif "503" in msg or "504" in msg:
+            reply = "ตอนนี้ AI คนใช้เยอะ ลองส่งใหม่อีกครั้งนะครับ"
         else:
-            reply = "เอาใหม่ ตั้งสติดี พิมพ์ภาษาคน"
+            reply = "ขอโทษครับ แปลไม่สำเร็จ ลองใหม่อีกครั้งนะครับ"
 
     try:
         reply_text(event.reply_token, reply)
