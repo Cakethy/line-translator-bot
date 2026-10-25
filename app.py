@@ -144,7 +144,7 @@ def process_event(event):
         result = translate(text)
         reply = (
             f"📋 ทางการ\n{result['formal']}\n\n"
-            f"💬 แชทเพื่อน\n{result['casual']}"
+            f"💬 กันเอง\n{result['casual']}"
         )
     except Exception as e:
         print("ERROR:", type(e).__name__, str(e)[:500])
