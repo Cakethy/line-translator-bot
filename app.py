@@ -24,12 +24,11 @@ gemini = genai.Client(
 )
 
 # GEMINI_MODEL ใส่ได้หลายชื่อ คั่นด้วยคอมมา จะลองตามลำดับ
-# เช่น gemini-3.8-flash,gemini-flash-latest,gemini-flash-lite-latest
 MODELS = [
     m.strip()
     for m in os.environ.get(
         "GEMINI_MODEL",
-        "gemini-3.8-flash,gemini-flash-latest,gemini-flash-lite-latest",
+        "gemini-3.5-flash-lite,gemini-3.8-flash,gemini-2.5-flash-lite",
     ).split(",")
     if m.strip()
 ]
